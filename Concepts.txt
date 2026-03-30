@@ -1,0 +1,66 @@
+This document provides a basic breakdown of all the major concepts in the game.
+
+1. Items:
+
+i. Item: 
+The root object. Any item in the game starts out as an Item object.
+Every Item object has it's own components that make up everything it can do.
+
+ii. Stack:
+Constant items can be converted to stacks and stacks have a base item and some amount.
+
+2. Entities:
+
+i. Entity:
+The root object. Every entitiy in the game will be an Entity object, including the player.
+entitiy behaviour is heavily dependent on it's tags and memory.
+Entity is the only object that represents entities.
+
+3. Item Components:
+
+i. Usable:
+Any item that is to be used with the "use" keyword by the player must contain a Usable sub-object.
+
+ii. Equippable:
+Any item that is to be equippable by the player must contain an Equippable sub-object.
+Armors, Weapons, Ammo are all Equippables.
+
+4. Entity Components:
+
+i. Stats:
+All the raw stats of an entity are to be stored in this object.
+
+ii. Cultivation:
+The main individual player progression of the game. It is further split into physical, qi and soul.
+
+iii. MoveSetsManager:
+The method by which entities, specifically NPCs move about in the world depending on the time of day.
+
+iv. Loadout:
+The collection of all the items/stacks currently equipped by the entity.
+
+iv. Inventory:
+The container for storing Items and Stacks in a search efficient structure.
+
+v. Memory:
+The attributes defining behaviour of an entity towards the player.
+
+5. Conditionals:
+
+i. BasicConditional:
+Used for simple checking of some condition(s), which if True trigger some result(s).
+
+ii. AdvancedConditional:
+Used for more complex checking of multiple condition(s) paths that lead to different result(s).
+
+6. Maps:
+
+i. Map:
+The root object of a world map, holds Locations.
+
+ii. Location:
+Holds SubLocations.
+
+iii. SubLocation:
+The functional layer of any world map.
+The normal gameplay loop takes place here.
