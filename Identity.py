@@ -25,7 +25,9 @@ class Identity:
     def object_type(self) -> str:
         return self.object_id.split("_")[0]
     
-    def __eq__(self, other : Identity) -> bool:
+    def __eq__(self, other : object) -> bool:
+        if not isinstance(other, Identity):
+            return NotImplemented
         return self.object_id == other.object_id
     
     def __str__(self) -> str:

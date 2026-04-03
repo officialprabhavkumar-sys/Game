@@ -23,7 +23,7 @@ class Item:
     eg. Durability.
     """
     
-    __slots__ = ["identity", "Usable", "equippable", "weight", "price"]
+    __slots__ = ["identity", "usable", "equippable", "weight", "price"]
     
     unstackable_equippable_components = (Armor, MeleeWeapon, RangedWeapon) #All equippable components that make an item unstackable.
     

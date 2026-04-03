@@ -29,6 +29,8 @@ class ConditionInterpreter():
         """
         if not condition:
             return True
+        #Needs to be implemented.
+        return False
 
 def test_module():
     print("Testing module ConditionInterpreter.py")

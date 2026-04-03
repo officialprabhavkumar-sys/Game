@@ -149,7 +149,7 @@ class Inventory:
         self.items.pop(item_type)
         return True
     
-    def can_add_objects(self, objects : list[Item, Stack]) -> bool:
+    def can_add_objects(self, objects : list[Item | Stack]) -> bool:
         """
         Returns True if all objects from the given list can be added to the inventory, else returns False.
         """
@@ -160,7 +160,7 @@ class Inventory:
         
         return weight_after_adding_all <= self.capacity
     
-    def add_objects(self, objects : list[Item, Stack], item_registry : Registry, empty_other : bool = True, add_partial : bool = False) -> tuple[bool, int]:
+    def add_objects(self, objects : list[Item | Stack], item_registry : Registry, empty_other : bool = True, add_partial : bool = False) -> tuple[bool, int]:
         """
         Adds all objects to the inventory.
         
@@ -201,7 +201,7 @@ class Inventory:
         
         return (to_add_len > 0, to_add_len)
     
-    def calculate_weight(self) -> float:
+    def calculate_weight(self) -> None:
         """
         Calculates and assigns total weight of all the items to the weight attribute of the object.
         """

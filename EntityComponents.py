@@ -3,6 +3,7 @@ This module contains almost all the components that make up any entity and it's 
 """
 
 from Items import Item, Stack
+from Inventory import Inventory
 
 class EnergyContainer:
     """
@@ -161,6 +162,14 @@ class Stats:
         self.strength = strength
         self.agility = agility
     
+    @property
+    def is_alive(self) -> bool:
+        """
+        Returns True if health is more than 0, else returns False.
+        """
+        
+        return self.health > 0
+    
     def to_dict(self) -> dict:
         return {
             "health" : self.health,
@@ -190,6 +199,14 @@ class PhysicalCultivation:
         self.stats = stats
         self.health = health
         self.stamina = stamina
+    
+    @property
+    def is_alive(self) -> bool:
+        """
+        Returns True if health is more than 0, else returns False.
+        """
+        
+        return self.stats.is_alive
     
     def to_dict(self) -> dict:
         return {
@@ -273,10 +290,10 @@ class Cultivation:
     @property
     def is_alive(self) -> bool:
         """
-        Returns True if health is above 0.
+        Returns True if physical cultivation's health is more than 0, else returns False.
         """
         
-        return self.physical.health > 0
+        return self.physical.is_alive
     
     def to_dict(self) -> dict:
         return {
@@ -554,6 +571,23 @@ class Loadout:
             return None
         return self.slots[slot]
     
+    def is_equipped(self, item_id : str) -> bool:
+        """
+        Returns True if item_id is equipped in any slot, else returns False.
+        """
+        
+        for slot in self.slots:
+            item = self.slots[slot]
+            if item is None:
+                continue
+            elif isinstance(item, Item):
+                if item.identity.object_id == item_id:
+                    return True
+            elif isinstance(item, Stack):
+                if item.item.identity.object_id == item_id:
+                    return True
+        return False
+    
     def to_dict(self) -> dict:
         slots = {}
         for slot in self.slots:
@@ -564,5 +598,16 @@ class Loadout:
                 slots[slot] = item.identity.object_id
             else:
                 slots[slot] = item.item.identity.object_id
-        
         return slots
+    
+class TradeManager:
+    """
+    
+    """
+    
+    __slots__ = ["trade_inventory", "buying_multiplier", "selling_multiplier"]
+    
+    def __init__(self, trade_inventory : Inventory, buying_multiplier : float = 1.0, selling_multiplier : float = 1.0):
+        self.trade_inventory = trade_inventory
+        self.buying_multiplier = buying_multiplier
+        self.selling_multiplier = selling_multiplier

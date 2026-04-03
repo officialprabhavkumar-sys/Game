@@ -192,6 +192,7 @@ class ElementalProtection:
         
         if override_with_other_max_magnitude:
             self.max_magnitude = other.max_magnitude
+        return True
     
     def __str__(self) -> str:
         return f"Element : {self.element}\n Conditions : {self.conditions}\nFlat Reduction : {self.magnitude}\nMax Reduction : {self.max_magnitude or "Infinite"}\nPercentage Reduction : {self.percentage}\n"
@@ -344,7 +345,7 @@ class Ammo:
     
     __slots__ = ["ammo_type", "use_cost", "slice_damage", "pierce_damage", "crush_damage", "accuracy", "elemental_damages"]
     
-    def __init__(self, ammo_type : str, use_cost : dict[Literal["qi", "soul_qi", "health", "essence"], int] = None, slice_damage : int = 0, pierce_damage : int = 0, crush_damage : int = 0, accuracy : float = 1.0, elemental_damages : dict[str, int] | None = None):
+    def __init__(self, ammo_type : str, use_cost : dict[Literal["qi", "soul_qi", "health", "essence"], int] | None = None, slice_damage : int = 0, pierce_damage : int = 0, crush_damage : int = 0, accuracy : float = 1.0, elemental_damages : dict[str, int] | None = None):
         self.ammo_type = ammo_type
         self.use_cost = use_cost or {} # cost of using the ammo such as qi, soul_qi, health or essence mapping to an int.
         self.slice_damage = slice_damage
@@ -406,8 +407,8 @@ class MeleeWeapon:
         """
         
         durability_ratio = self.durability.durability_ratio
-        physical_damage_packet = PhysicalDamagePacket(slice_damage = self.slice_damage * durability_ratio, pierce_damage = self.pierce_damage * durability_ratio, crush_damage = self.crush_damage * durability_ratio)
-        elemental_damage_packets = [ElementalDamagePacket(element = element, amount = amount * durability_ratio) for element, amount in self.elemental_damages.items()]
+        physical_damage_packet = PhysicalDamagePacket(slice_damage = int(self.slice_damage * durability_ratio), pierce_damage = int(self.pierce_damage * durability_ratio), crush_damage = int(self.crush_damage * durability_ratio))
+        elemental_damage_packets = [ElementalDamagePacket(element = element, amount = int(amount * durability_ratio)) for element, amount in self.elemental_damages.items()]
         damage_packet = DamagePacket(physical_damage_packet = physical_damage_packet, elemental_damage_packets = elemental_damage_packets)
         return damage_packet
     
@@ -466,7 +467,7 @@ class RangedWeapon:
         
         for elemental_damage_packet in damage_packet.elemental_damage_packets: # modifies ElementalDamagePacket(s) if specified element is in elemental_damages_mult.
             if elemental_damage_packet.element in self.elemental_damages_mult:
-                elemental_damage_packet.amount = elemental_damage_packet.amount * self.elemental_damages_mult[elemental_damage_packet.element] * durability_ratio
+                elemental_damage_packet.amount = int(elemental_damage_packet.amount * self.elemental_damages_mult[elemental_damage_packet.element] * durability_ratio)
         
         return damage_packet
     
