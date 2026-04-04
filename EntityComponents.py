@@ -4,6 +4,9 @@ This module contains almost all the components that make up any entity and it's 
 
 from Items import Item, Stack
 from Inventory import Inventory
+from Tags import Tags
+
+from typing import Any
 
 class EnergyContainer:
     """
@@ -59,7 +62,7 @@ class EnergyContainer:
         
         if self.current_amount < self.soft_maximum_amount:
             return 0
-        amount_to_reduce = abs(int(self.soft_maximum_amount * self.oversaturation_dispersion_percentage))
+        amount_to_reduce = max(abs(int(self.soft_maximum_amount * self.oversaturation_dispersion_percentage)), 1) # Atleast 1 unit of resource will be reduced if current_amount is oversaturated.
         amount_to_reduce = min(self.current_amount - self.soft_maximum_amount, amount_to_reduce) # never drop below soft_maximum_amount
         self.current_amount -= amount_to_reduce
         return amount_to_reduce
@@ -111,7 +114,7 @@ class EnergyContainer:
         True if current_amount == 0, else False.
         """
         
-        return self.current_amount == 0
+        return self.current_amount <= 0
     
     @property
     def is_oversaturated(self) -> bool:
@@ -139,7 +142,7 @@ class EnergyContainer:
         
         return self.current_amount == self.adjusted_maximum_amount
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, int | float]:
         return {
             "absolute_maximum_amount" : self.absolute_maximum_amount,
             "current_amount" : self.current_amount,
@@ -162,15 +165,7 @@ class Stats:
         self.strength = strength
         self.agility = agility
     
-    @property
-    def is_alive(self) -> bool:
-        """
-        Returns True if health is more than 0, else returns False.
-        """
-        
-        return self.health > 0
-    
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, int | float]:
         return {
             "health" : self.health,
             "stamina" : self.stamina,
@@ -184,10 +179,11 @@ class PhysicalCultivation:
     
     Attribute:
     1. name : str
-    2. points_left : int : Unassigned points that can be assigned to any attribute.
-    3. stats : Stats : Values for different stats.
-    4. health : EnergyContainer : Health of the entity.
-    5. stamina : EnergyContainer : Stamina of the entity.
+    2. level : int
+    3. points_left : int : Unassigned points that can be assigned to any attribute.
+    4. stats : Stats : Values for different stats.
+    5. health : EnergyContainer : Health of the entity.
+    6. stamina : EnergyContainer : Stamina of the entity.
     """
     
     __slots__ = ["name", "level", "points_left", "stats", "health", "stamina"]
@@ -206,9 +202,9 @@ class PhysicalCultivation:
         Returns True if health is more than 0, else returns False.
         """
         
-        return self.stats.is_alive
+        return not self.health.is_empty
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str | int | dict[str, int | float]]:
         return {
             "name" : self.name,
             "level" : self.level,
@@ -224,9 +220,10 @@ class QiCultivation:
     
     Attributes:
     1. name : str
-    2. mortal : EnergyContainer
-    3. immortal : EnergyContainer
-    4. celestial : EnergyContainer
+    2. level : int
+    3. mortal : EnergyContainer
+    4. immortal : EnergyContainer
+    5. celestial : EnergyContainer
     """
     
     __slots__ = ["name", "level", "mortal", "immortal", "celestial"]
@@ -253,7 +250,8 @@ class SoulCultivation:
     
     Attributes:
     1. name : str
-    2. soul : EnergyContainer
+    2. level : int
+    3. soul : EnergyContainer
     """
     
     __slots__ = ["name", "level", "soul"]
@@ -270,6 +268,30 @@ class SoulCultivation:
             "soul" : self.soul.to_dict()
         }
 
+class EssenceCultivation:
+    """
+    Container for holding Essence Cultivation attributes of an entity.
+    
+    Attributes:
+    1. name : str
+    2. level : int
+    3. Essence : EnergyContainer
+    """
+    
+    __slots__ = ["name", "level", "essence"]
+    
+    def __init__(self, name : str, level : int, essence : EnergyContainer):
+        self.name = name
+        self.level = level
+        self.essence = essence
+    
+    def to_dict(self) -> dict[str, str | int | dict]:
+        return {
+            "name" : self.name,
+            "level" : self.level,
+            "essence" : self.essence.to_dict()
+        }
+
 class Cultivation:
     """
     Container for holding PhysicalCultivation, QiCultivation, and SoulCultivation.
@@ -278,14 +300,16 @@ class Cultivation:
     1. physical : PhysicalCultivation
     2. qi : QiCultivation
     3. soul : SoulCultivation
+    4. essence : EssenceCultivation
     """
     
-    __slots__ = ["physical", "qi", "soul"]
+    __slots__ = ["physical", "qi", "soul", "essence"]
     
-    def __init__(self, physical : PhysicalCultivation, qi : QiCultivation, soul : SoulCultivation):
+    def __init__(self, physical : PhysicalCultivation, qi : QiCultivation, soul : SoulCultivation, essence : EssenceCultivation):
         self.physical = physical
         self.qi = qi
         self.soul = soul
+        self.essence = essence
     
     @property
     def is_alive(self) -> bool:
@@ -299,7 +323,8 @@ class Cultivation:
         return {
             "physical" : self.physical.to_dict(),
             "qi" : self.qi.to_dict(),
-            "soul" : self.soul.to_dict()
+            "soul" : self.soul.to_dict(),
+            "essence" : self.essence.to_dict()
         }
 
 class MovementNode:
@@ -313,7 +338,6 @@ class MovementNode:
     4. sublocation : str : The sublocation where the npc is to be transported when the node is in affect.
     5. active : bool : A MovementNode is only used when it's active.
     """
-    
     
     __slots__ = ["node_id", "hour", "minute", "sublocation", "active"]
     
@@ -599,15 +623,182 @@ class Loadout:
             else:
                 slots[slot] = item.item.identity.object_id
         return slots
+
+class Memory:
+    """
+    Container for holding reputation for other entities including the player.
+    """
     
+    MAX_REPUTATION = 10000 # MUST BE POSITIVE.
+    MIN_REPUTATION = -10000 # MUST BE NEGATIVE.
+    NEUTRAL_RANGE = {"MIN" : -500, "MAX" : 500}
+    THRESHOLDS = {
+        1 : 0.1,
+        2 : 0.3,
+        3 : 0.6,
+        4 : 0.9
+    }
+    THRESHOLDS_TO_LEVELS = {value : key for key, value in THRESHOLDS.items()} # {0.1 : 1, ...} Reverse of THRESHOLDS dict.
+    
+    __slots__ = ["individual_reputation", "faction_reputation", "traits"]
+    
+    def __init__(self, individual_reputation : dict[str, int], faction_reputation : dict[str, int], traits : Tags | None = None):
+        self.individual_reputation = individual_reputation
+        self.faction_reputation = faction_reputation
+        self.traits = traits or Tags([])
+    
+    def _get_reputation_level(self, reputation : int, reputation_figure_type : str, reputation_figure_id : str) -> int:
+        """
+        Internal method to get reputation level from reputation value.
+        """
+
+        if reputation >= 0:
+            for threshold in sorted(self.THRESHOLDS_TO_LEVELS.keys(), reverse = True):
+                if reputation >= threshold * self.MAX_REPUTATION:
+                    return self.THRESHOLDS_TO_LEVELS[threshold]
+        else:
+            for threshold in sorted(self.THRESHOLDS_TO_LEVELS.keys()):
+                if reputation <= threshold * self.MIN_REPUTATION:
+                    return -self.THRESHOLDS_TO_LEVELS[threshold]
+                
+        # The code should never reach this point because all possible reputation values should be covered by the thresholds.
+        # The only way this can happen is if the thresholds or bounds are set up incorrectly.
+        # Particularly when reputation is positive and thresholds are negative.
+        raise ValueError(f"Reputation value {reputation} for {reputation_figure_type}_id {reputation_figure_id} is invalid. Verify THRESHOLDS.\nTHRESHOLD : {self.THRESHOLDS}\n THRESHOLDS_TO_LEVELS : {self.THRESHOLDS_TO_LEVELS}")
+    
+    def get_individual_reputation(self, entity_id : str) -> int:
+        """
+        Returns the reputation for the entity with the entity_id provided.
+        If no reputation entry is found for the entity, returns 0.
+        """
+        
+        return self.individual_reputation.get(entity_id, 0)
+    
+    def get_faction_reputation(self, faction_id : str) -> int:
+        """
+        Returns the reputation for the faction with the faction_id provided.
+        If no reputation entry is found for the faction, returns 0.
+        """
+        
+        return self.faction_reputation.get(faction_id, 0)
+    
+    def get_individual_reputation_level(self, entity_id : str) -> int:
+        """
+        Returns the reputation level for the entity with the given entity_id.
+        """
+        
+        if not entity_id in self.individual_reputation: # Faster than using get method since I can return.
+            return 0
+        reputation = self.individual_reputation[entity_id]
+        return self._get_reputation_level(reputation, "entity", entity_id)
+    
+    def get_faction_reputation_level(self, faction_id : str) -> int:
+        """
+        Returns the reputation level for the faction with the given faction_id.
+        """
+        
+        if not faction_id in self.faction_reputation: # Faster than using get method since I can return.
+            return 0
+        reputation = self.faction_reputation[faction_id]
+        return self._get_reputation_level(reputation, "faction", faction_id)
+    
+    def modify_individual_reputation(self, entity_id : str, amount : int) -> None:
+        """
+        Modifies the reputation for the entity with the entity_id provided by the amount given.
+        If no reputation entry is found for the entity, it is created with the amount provided as the initial reputation.
+        Reputation is always modified in integer values, never floats.
+        Reputation will not drop below MIN_REPUTATION and will not increase beyond MAX_REPUTATION when using this method.
+        """
+        
+        current_reputation = self.get_individual_reputation(entity_id)
+        if amount >= 0:
+            new_reputation = min(current_reputation + amount, self.MAX_REPUTATION)
+        else:
+            new_reputation = max(current_reputation + amount, self.MIN_REPUTATION)
+        self.individual_reputation[entity_id] = new_reputation
+    
+    def modify_faction_reputation(self, faction_id : str, amount : int) -> None:
+        """
+        Modifies the reputation for the faction with the faction_id provided by the amount given.
+        If no reputation entry is found for the faction, it is created with the amount provided as the initial reputation.
+        Reputation is always modified in integer values, never floats.
+        Reputation will not drop below MIN_REPUTATION and will not increase beyond MAX_REPUTATION when using this method.
+        """
+        
+        current_reputation = self.get_faction_reputation(faction_id)
+        if amount >= 0:
+            new_reputation = min(current_reputation + amount, self.MAX_REPUTATION)
+        else:
+            new_reputation = max(current_reputation + amount, self.MIN_REPUTATION)
+        self.faction_reputation[faction_id] = new_reputation
+    
+    def to_dict(self) -> dict[str, dict[str, int] | dict[str, list[str]]]:
+        return {
+            "individual_reputation" : self.individual_reputation,
+            "faction_reputation" : self.faction_reputation,
+            "traits" : self.traits.to_dict()
+        }
+
 class TradeManager:
     """
-    
+    Manages the trade inventory of an entity and the memory of the entity for trading purposes.
+    Comes with base multipliers but can be overridden by modifying the class variables.
     """
     
-    __slots__ = ["trade_inventory", "buying_multiplier", "selling_multiplier"]
+    __slots__ = ["trade_inventory", "memory"]
     
-    def __init__(self, trade_inventory : Inventory, buying_multiplier : float = 1.0, selling_multiplier : float = 1.0):
+    BUYING_LEVEL_MULTIPLIERS = {
+        -4 : 0.1,
+        -3 : 0.3,
+        -2 : 0.5,
+        -1 : 0.8,
+        0 : 1.0,
+        1 : 1.05,
+        2 : 1.1,
+        3 : 1.15,
+        4 : 1.25
+    }
+    
+    SELLING_LEVEL_MULTIPLIERS = {
+        -4 : 3.0,
+        -3 : 2.5,
+        -2 : 2.0,
+        -1 : 1.5,
+        0 : 1.0,
+        1 : 0.9,
+        2 : 0.85,
+        3 : 0.8,
+        4 : 0.7
+    }
+    
+    # To avoid trade exploits where players buy low and sell high to the same exact trader.
+    BUYING_BASE_MULTIPLIER = 0.5 
+    SELLING_BASE_MULTIPLIER = 1.5
+    
+    def __init__(self, trade_inventory : Inventory, memory : Memory):
         self.trade_inventory = trade_inventory
-        self.buying_multiplier = buying_multiplier
-        self.selling_multiplier = selling_multiplier
+        self.memory = memory
+    
+    def get_buying_price_for_item(self, item : Item, entity_id : str) -> int:
+        """
+        Returns the buying price for the item provided based on the entity's memory.
+        """
+        
+        reputation_level = self.memory.get_individual_reputation_level(entity_id)
+        multiplier = self.BUYING_BASE_MULTIPLIER * self.BUYING_LEVEL_MULTIPLIERS.get(reputation_level, 1.0)
+        return int(item.price * multiplier)
+    
+    def get_selling_price_for_item(self, item : Item, entity_id : str) -> int:
+        """
+        Returns the selling price for the item provided based on the entity's memory.
+        """
+        
+        reputation_level = self.memory.get_individual_reputation_level(entity_id)
+        multiplier = self.SELLING_BASE_MULTIPLIER * self.SELLING_LEVEL_MULTIPLIERS.get(reputation_level, 1.0)
+        return int(item.price * multiplier)
+    
+    def to_dict(self) -> dict[str, dict[str, Any]]:
+        return {
+            "trade_inventory" : self.trade_inventory.to_dict(),
+            "memory" : self.memory.to_dict()
+        }

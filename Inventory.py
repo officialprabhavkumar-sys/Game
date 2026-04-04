@@ -5,6 +5,8 @@ This module contains the Inventory container that is used to hold all types of i
 from Items import Item, Stack
 from Registry import Registry
 
+from typing import Any
+
 class Inventory:
     
     __slots__ = ["capacity", "items", "stacks", "weight"]
@@ -243,7 +245,7 @@ class Inventory:
         
         return string
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "capacity" : self.capacity,
             "items" : {item_type : [item.to_dict() for item in self.items[item_type]] for item_type in self.items.keys()},
