@@ -1,6 +1,9 @@
 
 """
 This module contains all the various packets used to transfer data between different systems in the game.
+
+Note:
+The only packet not included in this module is the EffectPacket.
 """
 
 from dataclasses import dataclass
@@ -97,13 +100,3 @@ class DamagePacket:
             "physical_damage_packet" : self.physical_damage_packet.to_dict(),
             "elemental_damage_packet" : [elemental_damage_packet.to_dict() for elemental_damage_packet in self.elemental_damage_packets]
         }
-
-@dataclass(slots = True) 
-class EffectPacket:
-    """
-    All effects must be applied through an EffectPacket to the target.
-    """
-    
-    effect : str
-    duration : int
-    strength : float

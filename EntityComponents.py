@@ -5,8 +5,12 @@ This module contains almost all the components that make up any entity and it's 
 from Items import Item, Stack
 from Inventory import Inventory
 from Tags import Tags
+from Effects import Effect, EffectPacket, EffectRegistry
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from Combat import EntityCombatState
 
 class EnergyContainer:
     """
@@ -57,7 +61,8 @@ class EnergyContainer:
         Resource will not drop below soft_maximum_amount, only oversaturated amount will be decreased.
         
         Note:
-        if soft_maximum_amount * self.oversaturation_dispersion_percentage < 1, no amount will be reduced.
+        even if soft_maximum_amount * self.oversaturation_dispersion_percentage < 1,
+        atleast 1 unit of resource will be decreased if current_amount is oversaturated.
         """
         
         if self.current_amount < self.soft_maximum_amount:
@@ -566,7 +571,7 @@ class Loadout:
     
     __slots__ = ["slots"]
     
-    def __init__(self, slots : dict[str, Item | Stack]):
+    def __init__(self, slots : dict[str, Item | Stack | None]):
         self.slots = slots
     
     def has_slot(self, slot : str) -> bool:
@@ -747,6 +752,13 @@ class TradeManager:
     
     __slots__ = ["trade_inventory", "memory"]
     
+    TRAITS_MODIFIERS = {
+        "greedy" : 1.15,
+        "generous" : 0.9,
+        "green hand" : 0.95,
+        "experienced" : 1.05,
+    }
+    
     BUYING_LEVEL_MULTIPLIERS = {
         -4 : 0.1,
         -3 : 0.3,
@@ -779,13 +791,26 @@ class TradeManager:
         self.trade_inventory = trade_inventory
         self.memory = memory
     
+    @property
+    def traits_modifier(self) -> float:
+        """
+        Price modifier based on the traits of the entity.
+        """
+        
+        modifier = 1.0
+        
+        for trait in self.memory.traits:
+            if trait in self.TRAITS_MODIFIERS:
+                modifier *= self.TRAITS_MODIFIERS[trait]
+        return modifier
+    
     def get_buying_price_for_item(self, item : Item, entity_id : str) -> int:
         """
         Returns the buying price for the item provided based on the entity's memory.
         """
         
         reputation_level = self.memory.get_individual_reputation_level(entity_id)
-        multiplier = self.BUYING_BASE_MULTIPLIER * self.BUYING_LEVEL_MULTIPLIERS.get(reputation_level, 1.0)
+        multiplier = self.BUYING_BASE_MULTIPLIER * self.BUYING_LEVEL_MULTIPLIERS.get(reputation_level, 1.0) * self.traits_modifier
         return int(item.price * multiplier)
     
     def get_selling_price_for_item(self, item : Item, entity_id : str) -> int:
@@ -794,11 +819,145 @@ class TradeManager:
         """
         
         reputation_level = self.memory.get_individual_reputation_level(entity_id)
-        multiplier = self.SELLING_BASE_MULTIPLIER * self.SELLING_LEVEL_MULTIPLIERS.get(reputation_level, 1.0)
+        multiplier = self.SELLING_BASE_MULTIPLIER * self.SELLING_LEVEL_MULTIPLIERS.get(reputation_level, 1.0) * self.traits_modifier
         return int(item.price * multiplier)
     
     def to_dict(self) -> dict[str, dict[str, Any]]:
         return {
             "trade_inventory" : self.trade_inventory.to_dict(),
             "memory" : self.memory.to_dict()
+        }
+
+class EffectsManager:
+    """
+    Manages the effects on an entity.
+    """
+    
+    __slots__ = ["effects", ]
+    
+    def __init__(self, effects : dict[str, dict[str, Effect]]):
+        self.effects = effects
+    
+    @staticmethod
+    def verify_effects_for_merge(first : Effect, second : Effect) -> None:
+        """
+        Verifies if the two effects can be merged.
+        Raises ValueError if the effects cannot be merged.
+        """
+        
+        if first.effect_reference.effect_id != second.effect_reference.effect_id:
+            raise ValueError(f"Cannot merge effects {first.effect_reference.effect_id} and {second.effect_reference.effect_id}.")
+    
+    @staticmethod
+    def _merge_effects_replace(first : Effect, second : Effect) -> Effect:
+        """
+        Merges two effects by replacing the previous effect with the new one.
+        """
+        
+        return second
+    
+    @staticmethod
+    def _merge_effects_magnitude_add(first : Effect, second : Effect) -> Effect:
+        """
+        Merges two effects by adding their magnitudes together.
+        """
+        
+        return Effect(first.effect_reference, first.duration, first.magnitude + second.magnitude, first.source_entity)
+    
+    @staticmethod
+    def _merge_effects_duration_add(first : Effect, second : Effect) -> Effect:
+        """
+        Merges two effects by adding their durations together.
+        """
+        
+        return Effect(first.effect_reference, first.duration + second.duration, first.magnitude, first.source_entity)
+    
+    #doesn't look pretty, but works.
+    OVERRIDE_METHODS_TO_METHODS = {
+        "replace" : _merge_effects_replace,
+        "magnitude_add" : _merge_effects_magnitude_add,
+        "duration_add" : _merge_effects_duration_add
+    }
+    
+    @staticmethod
+    def merge_effects(first : Effect, second : Effect) -> Effect:
+        """
+        Merges two effects based on their override method and returns the merged effect.
+        """
+        
+        EffectsManager.verify_effects_for_merge(first, second)
+        
+        if not first.effect_reference.override_method in EffectsManager.OVERRIDE_METHODS_TO_METHODS:
+            raise ValueError(f"Invalid override method {first.effect_reference.override_method} for effect_id {first.effect_reference.effect_id}")
+        return EffectsManager.OVERRIDE_METHODS_TO_METHODS[first.effect_reference.override_method](first, second)
+    
+    def add_effect(self, effect_packet : EffectPacket, effect_registry : EffectRegistry) -> None:
+        """
+        Adds the effect to the manager.
+        If an effect with the same effect_id is already present,
+        override behaviour is determined by override_method of the EffectBaseReference.
+        """
+        
+        entity_id = effect_packet.source_entity.entity_id if isinstance(effect_packet.source_entity, EntityCombatState) else effect_packet.source_entity
+        
+        if not entity_id in self.effects:
+            self.effects[entity_id] = {}
+            
+        base_reference = effect_registry.get_effect_reference(effect_packet.effect_id)
+        if base_reference is None:
+            raise ValueError(f"Effect with effect_id {effect_packet.effect_id} not found in the registry.")
+        new_effect = Effect(base_reference, effect_packet.duration, effect_packet.magnitude, effect_packet.source_entity)
+        
+        if not effect_packet.effect_id in self.effects[entity_id]:
+            self.effects[entity_id][effect_packet.effect_id] = new_effect
+            return
+        
+        previous = self.effects[entity_id][effect_packet.effect_id]
+        self.effects[entity_id][effect_packet.effect_id] = self.merge_effects(previous, new_effect)
+        
+    
+    def remove_effect(self, effect_id : str, source_entity_id : str) -> bool:
+        """
+        Removes the effect with the effect_id provided from the effects.
+        If The effect is successfully removed, returns True, else Returns False.
+        """
+        
+        if not source_entity_id in self.effects:
+            return False
+        if not effect_id in self.effects[source_entity_id]:
+            return False
+        self.effects[source_entity_id].pop(effect_id)
+        return True
+    
+    def all_effects(self) -> list[Effect]:
+        """
+        List of all Effects currently on the entity.
+        """
+        
+        all_effects = []
+        for effects in self.effects.values():
+            all_effects.extend(list(effects.values()))
+        return all_effects
+    
+    def decrease_duration_and_cleanup(self, amount : int = 1) -> None:
+        """
+        Removes the given amount of duration from all effects and removes the ones with 0 or less duration left.
+        """
+        to_remove_source_entity = []
+        for source_entity_id in self.effects.keys():
+            to_remove = []
+            for effect_id, effect in self.effects[source_entity_id].items():
+                effect.duration -= amount
+                if effect.duration < 1:
+                    to_remove.append(effect_id)
+            for effect_id in to_remove:
+                self.effects[source_entity_id].pop(effect_id)
+            if len(self.effects[source_entity_id]) == 0:
+                to_remove_source_entity.append(source_entity_id)
+        for source_entity_id in to_remove_source_entity:
+            self.effects.pop(source_entity_id)
+
+    def to_dict(self) -> dict[str, dict[str, dict]]:
+        return {
+            "effects" : {source_entity_id : {effect_id : effect.to_dict() for effect_id, effect in self.effects[source_entity_id].items()} for source_entity_id in self.effects.keys()}
         }
