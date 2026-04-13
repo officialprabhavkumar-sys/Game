@@ -145,6 +145,21 @@ class SubLocation:
         self.tags = tags or Tags([])
         self.exit_ids = set(self.exits.values())
     
+    def add_entity(self, entity : Entity) -> None:
+        """
+        Adds the given entity to sublocation's entities.
+        """
+        
+        self.entities[entity.identity.object_id] = entity
+    
+    def remove_entity(self, entity_id : str) -> bool:
+        """
+        Removes entity by entity_id.
+        Returns True if entity is successfully removed, else Returns False.
+        """
+        
+        return not self.entities.pop(entity_id, None) is None
+    
     def has_entity(self, entity_id : str) -> bool:
         """
         Returns True if entity by the entity_id is in the sublocation, else Returns False.
@@ -160,6 +175,13 @@ class SubLocation:
         if not entity_id in self.entities:
             return None
         return self.entities[entity_id]
+    
+    def get_and_remove_entity(self, entity_id : str) -> Entity | None:
+        """
+        Returns the entity by entity_id if present, else Returns None.
+        """
+        
+        return self.entities.pop(entity_id, None)
     
     def recompute_exit_ids(self) -> None:
         """
@@ -243,11 +265,11 @@ class PathFinder:
                     path_taken.append(current_node)
                     current_node = visited[current_node]
                 return cost, path_taken[::-1]
-            current_sublocation : SubLocation = self.map_loader.get_sublocation(current_node) # already checked that current_sublocation is not None when current_sublocation was exit_sublocation below when adding it to the queue.
+            current_sublocation = self.map_loader.get_sublocation(current_node) # already checked that current_sublocation is not None when current_sublocation was exit_sublocation below when adding it to the queue.
             for exit_sublocation_id in current_sublocation.exits.values():
                 if exit_sublocation_id in visited:
                     continue
-                exit_sublocation : SubLocation = self.map_loader.get_sublocation(exit_sublocation_id)
+                exit_sublocation = self.map_loader.get_sublocation(exit_sublocation_id)
                 if exit_sublocation is None or exit_sublocation.is_locked:
                     continue
                 heapq.heappush(queue, (cost + exit_sublocation.size, exit_sublocation_id, current_node))
@@ -283,7 +305,7 @@ class PathFinder:
         if path_length == 1:
             return True
         for pointer in range(path_length - 1):
-            current_node : SubLocation = self.map_loader.get_sublocation(path[pointer])
+            current_node = self.map_loader.get_sublocation(path[pointer])
             if current_node is None:
                 return False
             if not path[(pointer + 1)] in current_node.exit_ids:
@@ -301,7 +323,7 @@ class PathFinder:
             return True
         for pointer in range(1, path_length):
             next_node_id = path[pointer]
-            next_node : SubLocation = self.map_loader.get_sublocation(next_node_id)
+            next_node = self.map_loader.get_sublocation(next_node_id)
             if next_node is None:
                 return False
             if next_node.is_locked: # O(1) operation
@@ -318,12 +340,12 @@ class PathFinder:
         if path_length == 1:
             return True
         current_node_id = path[0]
-        current_node : SubLocation = self.map_loader.get_sublocation(current_node_id)
+        current_node = self.map_loader.get_sublocation(current_node_id)
         if current_node is None:
             return False
         for pointer in range(1, path_length):
             next_node_id = path[pointer]
-            next_node : SubLocation = self.map_loader.get_sublocation(next_node_id)
+            next_node = self.map_loader.get_sublocation(next_node_id)
             if next_node is None or next_node.is_locked:
                 return False
             if not next_node_id in current_node.exit_ids:
