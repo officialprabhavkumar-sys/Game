@@ -76,5 +76,8 @@ class Tags:
     def __iter__(self):
         return iter(self.tags)
     
+    def to_list(self) -> list[str]:
+        return list(self.tags)
+    
     def to_dict(self) -> dict[str, list[str]]:
         return {"tags" : list(self.tags)}

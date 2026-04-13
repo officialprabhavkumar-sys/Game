@@ -47,15 +47,3 @@ class Entity:
             "tags" : self.tags.to_dict(),
             "trading_inventory" : self.trading_inventory.to_dict() if self.trading_inventory else None
         }
-
-class Memory:
-    """
-    Represents the memory of an entity, storing information about the reputation of the player with them.
-    There are plans of this being extended in the future,
-    to include more information about the player and potentially other entities.
-    """
-    
-    __slots__ = ["reputation", ]
-    
-    def __init__(self, reputation : int):
-        self.reputation = reputation

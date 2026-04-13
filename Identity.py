@@ -14,7 +14,7 @@ class Identity:
         self.object_id = object_id # should be in form : ItemType_ItemName_ItemInstance and unique across all other object ids.
         self.description = description
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str]:
         return {
             "name" : self.name,
             "object_id" : self.object_id,
@@ -24,6 +24,11 @@ class Identity:
     @property
     def object_type(self) -> str:
         return self.object_id.split("_")[0]
+    
+    @property
+    def root_object_id(self) -> str:
+        root_object_id = self.object_id.split("_")
+        return f"{root_object_id[0]}_{root_object_id[1]}"
     
     def __eq__(self, other : object) -> bool:
         if not isinstance(other, Identity):

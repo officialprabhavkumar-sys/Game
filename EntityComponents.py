@@ -7,7 +7,7 @@ from Inventory import Inventory
 from Tags import Tags
 from Effects import Effect, EffectPacket, EffectRegistry
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, Literal, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from Combat import EntityCombatState
@@ -605,8 +605,7 @@ class Loadout:
         Returns True if item_id is equipped in any slot, else returns False.
         """
         
-        for slot in self.slots:
-            item = self.slots[slot]
+        for item in self.slots.values():
             if item is None:
                 continue
             elif isinstance(item, Item):
@@ -629,7 +628,7 @@ class Loadout:
                 slots[slot] = item.item.identity.object_id
         return slots
 
-class Memory:
+class RelationMemory:
     """
     Container for holding reputation for other entities including the player.
     """
@@ -645,12 +644,19 @@ class Memory:
     }
     THRESHOLDS_TO_LEVELS = {value : key for key, value in THRESHOLDS.items()} # {0.1 : 1, ...} Reverse of THRESHOLDS dict.
     
-    __slots__ = ["individual_reputation", "faction_reputation", "traits"]
+    __slots__ = ["individual_reputation", "faction_reputation"]
     
-    def __init__(self, individual_reputation : dict[str, int], faction_reputation : dict[str, int], traits : Tags | None = None):
+    def __init__(self, individual_reputation : dict[str, int], faction_reputation : dict[str, int]):
         self.individual_reputation = individual_reputation
         self.faction_reputation = faction_reputation
-        self.traits = traits or Tags([])
+    
+    @classmethod
+    def refresh_THRESHOLDS_TO_LEVELS(cls) -> None:
+        """
+        Refreshes THRESHOLDS_TO_LEVELS class variable dictionary.
+        """
+        
+        cls.THRESHOLDS_TO_LEVELS = {value : key for key, value in cls.THRESHOLDS.items()}
     
     def _get_reputation_level(self, reputation : int, reputation_figure_type : str, reputation_figure_id : str) -> int:
         """
@@ -737,11 +743,10 @@ class Memory:
             new_reputation = max(current_reputation + amount, self.MIN_REPUTATION)
         self.faction_reputation[faction_id] = new_reputation
     
-    def to_dict(self) -> dict[str, dict[str, int] | dict[str, list[str]]]:
+    def to_dict(self) -> dict[str, dict[str, int]]:
         return {
             "individual_reputation" : self.individual_reputation,
             "faction_reputation" : self.faction_reputation,
-            "traits" : self.traits.to_dict()
         }
 
 class TradeManager:
@@ -750,13 +755,21 @@ class TradeManager:
     Comes with base multipliers but can be overridden by modifying the class variables.
     """
     
-    __slots__ = ["trade_inventory", "memory"]
+    __slots__ = ["trade_inventory", "relation_memory"]
     
     TRAITS_MODIFIERS = {
-        "greedy" : 1.15,
-        "generous" : 0.9,
-        "green hand" : 0.95,
-        "experienced" : 1.05,
+        "BUY" : {
+            "generous" : 1.1,
+            "green hand" : 1.05,
+            "experienced" : 0.95,
+            "greedy" : 0.85
+        },
+        "SELL" : {
+            "generous" : 0.9,
+            "green hand" : 0.95,
+            "experienced" : 1.05,
+            "greedy" : 1.15,
+        }
     }
     
     BUYING_LEVEL_MULTIPLIERS = {
@@ -787,45 +800,47 @@ class TradeManager:
     BUYING_BASE_MULTIPLIER = 0.5 
     SELLING_BASE_MULTIPLIER = 1.5
     
-    def __init__(self, trade_inventory : Inventory, memory : Memory):
+    def __init__(self, trade_inventory : Inventory, relation_memory : RelationMemory):
         self.trade_inventory = trade_inventory
-        self.memory = memory
+        self.relation_memory = relation_memory
     
-    @property
-    def traits_modifier(self) -> float:
+    @classmethod
+    def get_traits_modifier(cls, traits : Tags, purpose : Literal["BUY", "SELL"]) -> float:
         """
         Price modifier based on the traits of the entity.
+        The traits and purpose (trade type Literal "BUY" or "SELL") must be supplied.
         """
         
         modifier = 1.0
         
-        for trait in self.memory.traits:
-            if trait in self.TRAITS_MODIFIERS:
-                modifier *= self.TRAITS_MODIFIERS[trait]
+        trade_purpose_dict = cls.TRAITS_MODIFIERS[purpose]
+        
+        for trait in traits:
+            modifier *= trade_purpose_dict.get(trait, 1.0)
         return modifier
     
-    def get_buying_price_for_item(self, item : Item, entity_id : str) -> int:
+    def get_buy_price_mult_for(self, entity_id : str, traits : Tags) -> float:
         """
-        Returns the buying price for the item provided based on the entity's memory.
+        Returns the buying price multiplier for the item provided based on the entity's memory.
         """
         
-        reputation_level = self.memory.get_individual_reputation_level(entity_id)
-        multiplier = self.BUYING_BASE_MULTIPLIER * self.BUYING_LEVEL_MULTIPLIERS.get(reputation_level, 1.0) * self.traits_modifier
-        return int(item.price * multiplier)
+        reputation_level = self.relation_memory.get_individual_reputation_level(entity_id)
+        multiplier = self.BUYING_BASE_MULTIPLIER * self.BUYING_LEVEL_MULTIPLIERS.get(reputation_level, 1.0) * self.get_traits_modifier(traits, "BUY")
+        return multiplier
     
-    def get_selling_price_for_item(self, item : Item, entity_id : str) -> int:
+    def get_sell_price_mult_for(self, entity_id : str, traits : Tags) -> float:
         """
-        Returns the selling price for the item provided based on the entity's memory.
+        Returns the selling price multiplier for the item provided based on the entity's memory.
         """
         
-        reputation_level = self.memory.get_individual_reputation_level(entity_id)
-        multiplier = self.SELLING_BASE_MULTIPLIER * self.SELLING_LEVEL_MULTIPLIERS.get(reputation_level, 1.0) * self.traits_modifier
-        return int(item.price * multiplier)
+        reputation_level = self.relation_memory.get_individual_reputation_level(entity_id)
+        multiplier = self.SELLING_BASE_MULTIPLIER * self.SELLING_LEVEL_MULTIPLIERS.get(reputation_level, 1.0) * self.get_traits_modifier(traits, "SELL")
+        return multiplier
     
     def to_dict(self) -> dict[str, dict[str, Any]]:
         return {
             "trade_inventory" : self.trade_inventory.to_dict(),
-            "memory" : self.memory.to_dict()
+            "relation_memory" : self.relation_memory.to_dict()
         }
 
 class EffectsManager:
@@ -914,7 +929,6 @@ class EffectsManager:
         
         previous = self.effects[entity_id][effect_packet.effect_id]
         self.effects[entity_id][effect_packet.effect_id] = self.merge_effects(previous, new_effect)
-        
     
     def remove_effect(self, effect_id : str, source_entity_id : str) -> bool:
         """
@@ -943,6 +957,7 @@ class EffectsManager:
         """
         Removes the given amount of duration from all effects and removes the ones with 0 or less duration left.
         """
+        
         to_remove_source_entity = []
         for source_entity_id in self.effects.keys():
             to_remove = []
@@ -958,6 +973,254 @@ class EffectsManager:
             self.effects.pop(source_entity_id)
 
     def to_dict(self) -> dict[str, dict[str, dict]]:
+        
         return {
             "effects" : {source_entity_id : {effect_id : effect.to_dict() for effect_id, effect in self.effects[source_entity_id].items()} for source_entity_id in self.effects.keys()}
         }
+
+class DesireManager:
+    """
+    Container and Manager for the entity's desire for any item.
+    """
+    
+    __slots__ = ["individual_item_desires", "categorized_item_desires", "profession_desires"]
+    
+    TRAITS_MODIFIERS : dict[str, dict[Literal["tags", "items", "professions"], dict[str, float]]] = {}
+    '''
+    Every trait modifier entry must be in the format:
+    trait_name_1 : {
+        tags : {
+            tag_1 : tag_modifier_1,
+            ...
+        },
+        items : {
+            item_name_1 : item_modifier_1,
+            ...
+        },
+        professions : {
+            profession_name : profession_modifier_1,
+            ...
+        }
+    }
+    '''
+    
+    def __init__(self, individual_item_desires : dict[str, dict[str, float]], categorized_item_desires : dict[str, dict[str, float]], profession_desires : dict[str, dict[str, float]]):
+        self.individual_item_desires = individual_item_desires # Used in trading.
+        self.categorized_item_desires = categorized_item_desires # Used in trading.
+        self.profession_desires = profession_desires # Used for expansion of or changing of npc profession.
+    
+    @classmethod
+    def get_desire_mult_for_item_by_traits(cls, item : Item, traits : Tags) -> float:
+        """
+        Returns the desire multiplier for the given item by the provided traits.
+        """
+        
+        root_object_id = item.identity.root_object_id
+        
+        desire = 1.0
+        
+        for trait in traits:
+            if not trait in cls.TRAITS_MODIFIERS:
+                continue
+            trait_modifiers = cls.TRAITS_MODIFIERS[trait]
+            desire *= trait_modifiers["items"].get(root_object_id, 1) # Desire multiplier from traits individual items.
+            tags_traits_modifiers = trait_modifiers["tags"]
+            for tag in item.tags: # Desire multipliers from traits items by tags.
+                desire *= tags_traits_modifiers.get(tag, 1)
+                
+        return desire
+    
+    @classmethod
+    def get_desire_mult_for_profession_by_traits(cls, profession : str, traits : Tags) -> float:
+        """
+        Returns the desire multiplier for the given profession by the provided traits.
+        """
+        
+        desire = 1.0
+        
+        for trait in traits:
+            if not trait in cls.TRAITS_MODIFIERS:
+                continue
+            profession_trait_modifiers = cls.TRAITS_MODIFIERS[trait]["professions"]
+            desire *= profession_trait_modifiers.get(profession, 1)
+        return desire
+    
+    def get_flat_desire_for_item(self, item : Item) -> float:
+        """
+        Gets the entity's desire for the item specified.
+        If desire for the specified item is not found, Returns 1.0 * modifier by traits provided.
+        """
+        
+        root_object_id = item.identity.root_object_id
+        desire = 1.0
+        
+        if root_object_id in self.individual_item_desires:
+            for flat in self.individual_item_desires[root_object_id].values():
+                desire += flat
+        for tag in item.tags:
+            if not tag in self.categorized_item_desires:
+                continue
+            desire += sum(self.categorized_item_desires[tag].values())
+        return desire
+    
+    def get_flat_desire_for_profession(self, profession : str) -> float:
+        """
+        Gets the desire for the profession specified.
+        If desire for the specified profession is not found, Returns 1.0 * modifier by traits provided.
+        """
+        
+        desire = 1.0
+        
+        if profession in self.profession_desires:
+            for flat in self.profession_desires[profession].values():
+                desire += flat
+        return desire
+    
+    def set_desire_for_item_for_reason(self, item : str, reason : str, amount : float) -> None:
+        """
+        Sets the desire for the item specified by the given amount for the specified reason.
+        """
+        
+        if not item in self.individual_item_desires:
+            if not amount:
+                return
+            self.individual_item_desires[item] = {}
+            
+        individual_item_desires_dict = self.individual_item_desires[item]
+        if not amount: # will not set the desire for the item to 0 since any multiplier when 0 will make whole result 0.
+            individual_item_desires_dict.pop(reason, None)
+            
+            if not individual_item_desires_dict:
+                self.individual_item_desires.pop(item)
+            return
+        
+        individual_item_desires_dict[reason] = amount
+    
+    def set_desire_for_profession_for_reason(self, profession : str, reason : str, amount : float) -> None:
+        """
+        Sets the desire for the item specified by the given amount for the specified reason.
+        """
+        
+        if not profession in self.profession_desires:
+            if not amount:
+                return
+            self.profession_desires[profession] = {}
+            
+        profession_desires_dict = self.profession_desires[profession]
+        if not amount: # will not set the desire for the profession to 0 since any multiplier when 0 will make whole result 0.
+            profession_desires_dict.pop(reason, None)
+            
+            if not profession_desires_dict:
+                self.profession_desires.pop(profession)
+            return
+        
+        profession_desires_dict[reason] = amount
+    
+    def modify_desire_for_item_for_reason(self, item : str, reason : str, amount : float) -> None:
+        """
+        Modifies the desire for the profession specified by the given amount for the specified reason.
+        """
+        
+        if not item in self.individual_item_desires: # If item entry is not preset, forwards request to set desire instead.
+            self.set_desire_for_item_for_reason(item, reason, amount)
+            return
+        
+        individual_item_desires_dict = self.individual_item_desires[item]
+        
+        if not reason in individual_item_desires_dict:
+            if not amount:
+                return
+            individual_item_desires_dict[reason] = amount
+            return
+        
+        modified_desire = individual_item_desires_dict[reason] + amount
+        if modified_desire == 0:
+            individual_item_desires_dict.pop(reason)
+            return
+        
+        individual_item_desires_dict[reason] = modified_desire
+    
+    def modify_desire_for_profession_for_reason(self, profession : str, reason : str, amount : float) -> None:
+        """
+        Modifies the desire for the profession specified by the given amount for the specified reason.
+        """
+        
+        if not profession in self.profession_desires: # If profession entry is not preset, forwards request to set desire instead.
+            self.set_desire_for_profession_for_reason(profession, reason, amount)
+            return
+        
+        profession_desires_dict = self.profession_desires[profession]
+        
+        if not reason in profession_desires_dict:
+            if not amount:
+                return
+            profession_desires_dict[reason] = amount
+            return
+        
+        modified_desire = profession_desires_dict[reason] + amount
+        if modified_desire == 0:
+            profession_desires_dict.pop(reason)
+            return
+        
+        profession_desires_dict[reason] = modified_desire
+    
+    def to_dict(self) -> dict[str, dict[str, dict[str, float]]]:
+        return {
+            "item_desires" : self.individual_item_desires,
+            "categorized_item_desires" : self.categorized_item_desires,
+            "profession_desires" : self.profession_desires
+        }
+
+class BehaviourManager:
+    """
+    Container and Manager for values affecting entity behaviour across trading, combat, conversations etc.
+    """
+    
+    __slots__ = ["relation_memory", "desire_manager", "trade_manager", "traits", "item_traits_desire_mult_cache", "profession_traits_desire_mult_cache"]
+    
+    def __init__(self, relation_memory : RelationMemory, desire : DesireManager, trade_manager : TradeManager, traits : Tags | None = None):
+        self.relation_memory = relation_memory
+        self.desire_manager = desire
+        self.trade_manager = trade_manager
+        self.traits = traits or Tags([])
+        self.item_traits_desire_mult_cache : dict[str, float] = {}
+        self.profession_traits_desire_mult_cache : dict[str, float] = {}
+    
+    def reset_item_traits_desire_mult_cache(self) -> None:
+        """
+        Resets item_traits_desire_mult_cache
+        """
+        
+        self.item_traits_desire_mult_cache.clear()
+    
+    def reset_profession_traits_desire_mult_cache(self) -> None:
+        """
+        Resets profession_traits_desire_mult_cache.
+        """
+        
+        self.profession_traits_desire_mult_cache.clear()
+    
+    def reset_caches(self) -> None:
+        """
+        Resets all caches.
+        """
+        
+        self.reset_item_traits_desire_mult_cache()
+        self.reset_profession_traits_desire_mult_cache()
+    
+    def get_desire_for_item(self, item : Item) -> float:
+        root_object_id = item.identity.root_object_id
+        
+        cache = self.item_traits_desire_mult_cache
+        
+        if not root_object_id in cache:
+            cache[root_object_id] = self.desire_manager.get_desire_mult_for_item_by_traits(item, self.traits)
+        return cache[root_object_id] * self.desire_manager.get_flat_desire_for_item(item)
+        
+    def get_desire_for_profession(self, profession : str) -> float:
+        
+        cache = self.profession_traits_desire_mult_cache
+        
+        if not profession in cache:
+            cache[profession] = self.desire_manager.get_desire_mult_for_profession_by_traits(profession, self.traits)
+        return cache[profession] * self.desire_manager.get_flat_desire_for_profession(profession)

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 class PhysicalDamagePacket:
     """
     The most basic DamagePacket component.
+    
     Attributes:
     1. slice_damage : int
     2. pierce_damage : int

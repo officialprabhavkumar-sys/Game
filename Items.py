@@ -18,21 +18,23 @@ class Item:
     3. equippable : Equippable : Optional component that allows an item to be equipped.
     4. weight : float : The weight of the item.
     5. price : int : The price of the item according to the standard calculation unit.
+    6. tags : Tags : The tags for the item.
     
     Items can be either stackable or unstackable depending on whether they contain attributes that make each instance unique.
     eg. Durability.
     """
     
-    __slots__ = ["identity", "usable", "equippable", "weight", "price"]
+    __slots__ = ["identity", "usable", "equippable", "weight", "price", "tags"]
     
     unstackable_equippable_components = (Armor, MeleeWeapon, RangedWeapon) #All equippable components that make an item unstackable.
     
-    def __init__(self, identity : Identity, usable : Usable | None = None, equippable : Equippable | None = None, weight : float = 0, price : int = 1):
+    def __init__(self, identity : Identity, usable : Usable | None = None, equippable : Equippable | None = None, weight : float = 0, price : int = 1, tags : Tags):
         self.identity = identity
         self.usable = usable
         self.equippable = equippable
         self.weight = weight
         self.price = price
+        self.tags = tags
     
     def copy(self, item_registry : Registry) -> Item:
         """
