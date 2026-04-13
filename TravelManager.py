@@ -130,17 +130,17 @@ class TravelManager:
                 self.remove_journey(journey_id)
                 continue
             
-            travel_required = current_sublocation.size
             journey.progress += amount
-            if journey.progress >= travel_required: #Only advanced once even if progress is more than travel required multiple times over, do something about that.
+            travel_cost = current_sublocation.size
+            while journey.progress >= travel_cost:
                 next_sublocation_id = journey.next_sublocation_id
                 if next_sublocation_id is None:
                     self.remove_journey(journey_id)
-                    continue
+                    break
                 next_sublocation : SubLocation = self.map_loader.get_sublocation(next_sublocation_id)
                 if next_sublocation is None:
                     self.remove_journey(journey_id)
-                    continue
+                    break
                 for entity_id in list(journey.travel_group.keys()):
                     entity = current_sublocation.get_entity(entity_id) # O(1)
                     if entity is None or not entity.is_alive:
@@ -149,4 +149,6 @@ class TravelManager:
                     current_sublocation.remove_entity(entity_id)
                     next_sublocation.add_entity(entity)
                 journey.current_node += 1
-                journey.progress -= travel_required
+                journey.progress -= travel_cost
+                travel_cost = next_sublocation.size
+                current_sublocation = next_sublocation
