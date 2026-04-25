@@ -155,6 +155,7 @@ def test_module():
     advanced_conditional = AdvancedConditional([{"conditions" : ["", ""], "results" : [conditional_result, conditional_result]}])
     conditional_manager.add_conditional(basic_conditional)
     conditional_manager.add_conditional(advanced_conditional)
+    print(conditional_manager)
     conditional_manager.add_matched_to_queue(True)
     print(conditional_manager)
     print(f"\nTest Complete.")

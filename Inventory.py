@@ -4,17 +4,19 @@ This module contains the Inventory container that is used to hold all types of i
 
 from Items import Item, Stack
 from Registry import Registry
+from Economy import Currency, Coffer
 
 from typing import Any
 
 class Inventory:
     
-    __slots__ = ["capacity", "items", "stacks", "weight"]
+    __slots__ = ["capacity", "items", "stacks", "coffer", "weight"]
     
-    def __init__(self, capacity : int, items : dict[str, list[Item]] | None = None, stacks : dict[str, Stack] | None = None):
+    def __init__(self, capacity : int, items : dict[str, list[Item]] | None = None, stacks : dict[str, Stack] | None = None, coffer : Coffer | None = None):
         self.capacity = capacity
         self.items = items or {}
         self.stacks = stacks or {}
+        self.coffer = coffer or Coffer([])
         self.calculate_weight() #Always calculates the weight of items. Instantly loads any adjusted stats.
     
     def add_item(self, item : Item) -> bool:
@@ -99,7 +101,10 @@ class Inventory:
         item_type = item_id.split("_")[0]
         if not item_type in self.items:
             return False
-        return item_id in self.items[item_type]
+        for item in self.items[item_type]:
+            if item.identity.object_id == item_id:
+                return True
+        return False
     
     def has_stack(self, stack_id : str) -> bool:
         """
@@ -123,7 +128,7 @@ class Inventory:
                 to_remove = index
                 break
             
-        if to_remove:
+        if not to_remove is None:
             self.weight -= self.items[item_type][to_remove].weight
             self.items[item_type].pop(to_remove)
             return True
@@ -203,6 +208,38 @@ class Inventory:
         
         return (to_add_len > 0, to_add_len)
     
+    def has_currency(self, currency_name) -> bool:
+        """
+        Returns True if the currency by the name specified is present, else Returns False.
+        """
+        
+        return self.coffer.has_currency(currency_name)
+    
+    def give_currency(self, currency : Currency) -> None:
+        """
+        Adds the specified currency to the container.
+        """
+        
+        self.coffer.give(currency)
+    
+    def can_take(self, currency_name : str, amount : int) -> bool:
+        """
+        Returns True if the amount specified can be removed from the specified currency, else Returns False.
+        """
+        
+        return self.coffer.can_take(currency_name, amount)
+    
+    def take_currency(self, currency_name : str, amount : int) -> Currency | None:
+        """
+        Returns the specified currency if operation was successful, else Returns None.
+        """
+        
+        return self.coffer.take(currency_name, amount)
+    
+    @property
+    def total_currency_value(self) -> float:
+        return self.coffer.total_value
+    
     def calculate_weight(self) -> None:
         """
         Calculates and assigns total weight of all the items to the weight attribute of the object.
@@ -250,4 +287,5 @@ class Inventory:
             "capacity" : self.capacity,
             "items" : {item_type : [item.to_dict() for item in self.items[item_type]] for item_type in self.items.keys()},
             "stacks" : {stack_id : self.stacks[stack_id].to_dict() for stack_id in self.stacks.keys()},
+            "coffer" : self.coffer.to_dict()
         }

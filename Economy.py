@@ -4,6 +4,7 @@ This module contains all the components related to the world's economy.
 
 from Identity import Identity
 from Tags import Tags
+from Logger import LogEntry
 
 from collections import deque
 
@@ -110,6 +111,9 @@ class CurrencyBase:
         if value < 0:
             return False
         self.value = value
+        
+        LogEntry("CURRENCYBASE", 0, f"Value of currency by currency_id {self.identity.object_id} set to {value}.").push_to_queue()
+        
         return True
     
     @property

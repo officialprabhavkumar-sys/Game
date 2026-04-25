@@ -5,8 +5,13 @@ This module contains the map and it's components.
 from Tags import Tags
 from Inventory import Inventory
 from Entities import Entity
+from Conversation import Conversation
+from Logger import LogEntry
 
 import heapq
+from typing import Any, TypeAlias
+
+BasicDataType : TypeAlias = bool | int | float | str
 
 class Map:
     """
@@ -121,8 +126,10 @@ class SubLocation:
     1. name : str : Name of the SubLocation.
     2. inventory : Inventory : SubLocation's inventory.
     3. entities : dict[str, Entity] : dictionary containing entity ids as keys and corresponding entities as values.
-    4. description : str : Description of the SubLocation.
-    5. tags : Tags : Tags for the SubLocation.
+    4. exits : dict[str, str] : Dictionary holding Sublocation's display name -> SubLocation's id for moving around.
+    5. description : str : Description of the SubLocation.
+    6. tags : Tags : Tags for the SubLocation.
+    7. sublocation_options : Conversation : Conversation containing options related to sublocation.
     """
     
     SIZE_TAGS = {
@@ -134,15 +141,19 @@ class SubLocation:
         "__OPEN__" : 1000000 # I mean at this point, who cares how big a space is?
     }
     
-    __slots__ = ["name", "inventory", "entities", "exits", "description", "tags", "exit_ids"]
+    basic_data_types = (bool, int, float, str)
     
-    def __init__(self, name : str, inventory : Inventory, entities : dict[str, Entity], exits : dict[str, str], description : str, tags : Tags | None = None):
+    __slots__ = ["name", "inventory", "entities", "exits", "description", "tags", "sublocation_options", "exit_ids", "other_data"]
+    
+    def __init__(self, name : str, inventory : Inventory, entities : dict[str, Entity], exits : dict[str, str], description : str, tags : Tags | None = None, sublocation_options : Conversation | None = None, other_data : dict[str, Any] | None = None):
         self.name = name
         self.inventory = inventory
         self.entities = entities
         self.exits = exits
         self.description = description
         self.tags = tags or Tags([])
+        self.sublocation_options = sublocation_options
+        self.other_data = other_data or {}
         self.exit_ids = set(self.exits.values())
     
     def add_entity(self, entity : Entity) -> None:
@@ -190,6 +201,65 @@ class SubLocation:
         
         self.exit_ids = set(self.exits.values())
     
+    def has_other_data(self, other_data_id : str) -> bool:
+        """
+        Returns True if any other_data_id is in other_data, else Returns False.
+        """
+        
+        return other_data_id in self.other_data
+    
+    def verify_data_value_is_basic(self, data_value : Any) -> bool:
+        """
+        Verifies whether data_value is basic type or not.
+        basic types include:
+        bool, int, float, str, dictionary of string keys and values of before mentioned types or list or tuple consisting of the before mentioned types.
+        
+        Note:
+        dictionaries, lists, tuples can be nested with other dictionaries, lists or tuples as long as the actual data is basic type.
+        """
+        
+        if isinstance(data_value, self.basic_data_types):
+            return True
+        elif isinstance(data_value, dict):
+            return all([all([isinstance(key, str) for key in data_value.keys()]), self.verify_data_value_is_basic(list(data_value.values()))])
+        elif isinstance(data_value, (list, tuple)):
+            return all([self.verify_data_value_is_basic(value) for value in data_value])
+        else:
+            return False
+        
+    def add_to_other_data(self, other_data_id : str, other_data_value : BasicDataType | dict[BasicDataType, BasicDataType] | list[BasicDataType] | tuple[BasicDataType], replace : bool = True) -> None:
+        """
+        Adds other_data_value to other_data by other_data_id.
+        other_data_value MUST be a basic data type such as : bool, int, float, str or tuple or list or dictionary consisting of the following.
+        If any other data is found in the value, data storing is aborted.
+        """
+        
+        if other_data_id in self.other_data and not replace:
+            return
+        
+        try:
+            other_data_id = str(other_data_id)
+        except:
+            LogEntry("SUBLOCATION", 1, f"other_data_id could not be converted to string. Aborting data addition to other_data for sublocation by name \"{self.name}\"")
+            return
+        
+        if not self.verify_data_value_is_basic(other_data_value):
+            try:
+                LogEntry("SUBLOCATION", 0, f"Could not add \"{other_data_value}\" to other_data for sublocation by name \"{self.name}\". Data is not basic type.")
+            except:
+                LogEntry("SUBLOCATION", 0, f"Could not add some data (Data could also not be converted to string) to other_data for sublocation by name \"{self.name}\". Data is not basic type.")
+            return
+        
+        self.other_data[other_data_id] = other_data_value
+    
+    def get_other_data(self, other_data_id : str) -> Any:
+        """
+        Returns value if other_data_id is present in other_data else returns None.
+        Use has_other_data to reliabily verify data presence.
+        """
+        
+        return self.other_data.get(other_data_id, None)
+    
     @property
     def size(self) -> int:
         """
@@ -208,6 +278,10 @@ class SubLocation:
     @property
     def is_locked(self) -> bool:
         return "__LOCKED__" in self.tags
+    
+    @property
+    def has_options(self) -> bool:
+        return not self.sublocation_options is None
     
     def to_dict(self) -> dict:
         return {
@@ -238,6 +312,8 @@ class PathFinder:
         """
         
         self.map_version += 1
+        
+        LogEntry("PATHFINDER", 0, f"Map version increased to : {self.map_version}.").push_to_queue()
     
     def _find_optimal_size_path(self, start : str, target : str) -> tuple[int, list[str]] | None:
         """
@@ -273,6 +349,9 @@ class PathFinder:
                 if exit_sublocation is None or exit_sublocation.is_locked:
                     continue
                 heapq.heappush(queue, (cost + exit_sublocation.size, exit_sublocation_id, current_node))
+        
+        LogEntry("PATHFINDER", 0, f"No open path found between Sublocations \"{start}\" -> \"{target}\".").push_to_queue()
+        
         return None
     
     def find_optimal_size_path(self, start : str, target : str) -> tuple[int, list[str]] | None:
@@ -358,6 +437,7 @@ class PathFinder:
         Removes all invalid paths from cache (all paths that return None).
         Returns the number of invalid paths removed.
         """
+        
         invalid_paths_removed = 0
         for parameters, path in list(self.cache.items()):
             if path is None or not self.verify_path_full(path[1]):
@@ -365,6 +445,9 @@ class PathFinder:
                 self.version_mapping.pop(parameters)
                 invalid_paths_removed += 1
                 continue
+            
+        LogEntry("PATHFINDER", 0, f"\"{invalid_paths_removed}\" Invalid paths removed from cache.").push_to_queue()
+        
         return invalid_paths_removed
     
     def reset_caches(self) -> None:
@@ -372,9 +455,13 @@ class PathFinder:
         Resets pathfinder cache, version_mapping and map_version.
         """
 
+        map_version_before_reset = self.map_version
+        
         self.cache.clear()
         self.version_mapping.clear()
         self.map_version = 0
+        
+        LogEntry("PATHFINDER", 0, f"Caches Reset. Map Version before reset : \"{map_version_before_reset}\"").push_to_queue()
     
     def to_dict(self) -> dict:
         return {

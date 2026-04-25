@@ -5,6 +5,7 @@ This module contains the Item and Stack classes used to represent all item objec
 from Identity import Identity
 from ItemComponents import Usable, Equippable, Armor, MeleeWeapon, RangedWeapon
 from Registry import Registry
+from Tags import Tags
 
 from copy import deepcopy
 
@@ -28,13 +29,13 @@ class Item:
     
     unstackable_equippable_components = (Armor, MeleeWeapon, RangedWeapon) #All equippable components that make an item unstackable.
     
-    def __init__(self, identity : Identity, usable : Usable | None = None, equippable : Equippable | None = None, weight : float = 0, price : int = 1, tags : Tags):
+    def __init__(self, identity : Identity, usable : Usable | None = None, equippable : Equippable | None = None, weight : float = 0, price : int = 1, tags : Tags | None = None):
         self.identity = identity
         self.usable = usable
         self.equippable = equippable
         self.weight = weight
         self.price = price
-        self.tags = tags
+        self.tags = tags or Tags([])
     
     def copy(self, item_registry : Registry) -> Item:
         """

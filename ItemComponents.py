@@ -185,7 +185,7 @@ class ElementalProtection:
             return False
         
         self.magnitude += other.magnitude * merge_effectiveness
-        self.percentage += other.magnitude * merge_effectiveness
+        self.percentage += other.percentage * merge_effectiveness
         
         if merge_other_conditions:
             self.conditions.extend(other.conditions)

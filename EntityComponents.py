@@ -6,6 +6,7 @@ from Items import Item, Stack
 from Inventory import Inventory
 from Tags import Tags
 from Effects import Effect, EffectPacket, EffectRegistry
+from Logger import LogEntry
 
 from typing import Any, Literal, TYPE_CHECKING
 
@@ -657,6 +658,8 @@ class RelationMemory:
         """
         
         cls.THRESHOLDS_TO_LEVELS = {value : key for key, value in cls.THRESHOLDS.items()}
+        
+        LogEntry("RELATIONMEMORY", 0, f"THRESHOLDS_TO_LEVELS refreshed. New : \"{cls.THRESHOLDS_TO_LEVELS}\".")
     
     def _get_reputation_level(self, reputation : int, reputation_figure_type : str, reputation_figure_id : str) -> int:
         """
@@ -675,6 +678,9 @@ class RelationMemory:
         # The code should never reach this point because all possible reputation values should be covered by the thresholds.
         # The only way this can happen is if the thresholds or bounds are set up incorrectly.
         # Particularly when reputation is positive and thresholds are negative.
+        
+        LogEntry("RELATIONMEMORY", 2, f"Reputation value {reputation} for {reputation_figure_type}_id {reputation_figure_id} is invalid. Verify THRESHOLDS.\nTHRESHOLD : {self.THRESHOLDS}\n THRESHOLDS_TO_LEVELS : {self.THRESHOLDS_TO_LEVELS}")
+        
         raise ValueError(f"Reputation value {reputation} for {reputation_figure_type}_id {reputation_figure_id} is invalid. Verify THRESHOLDS.\nTHRESHOLD : {self.THRESHOLDS}\n THRESHOLDS_TO_LEVELS : {self.THRESHOLDS_TO_LEVELS}")
     
     def get_individual_reputation(self, entity_id : str) -> int:
@@ -943,6 +949,7 @@ class EffectsManager:
         self.effects[source_entity_id].pop(effect_id)
         return True
     
+    @property
     def all_effects(self) -> list[Effect]:
         """
         List of all Effects currently on the entity.
@@ -1171,17 +1178,89 @@ class DesireManager:
             "profession_desires" : self.profession_desires
         }
 
+class ProfessionBase:
+    """
+    Container for holding basic details regarding any profession.
+    
+    Attributes:
+    1. name : str : Name of the profession.
+    2. is_stationed : bool : Whether the profession requires the entity to remain in the location or not.
+    3. required_plot_type : str : Specifies the plot type required by the profession.
+    4. movement_and_action_type : str : Specifies the type of movement and actions made by the entity.
+    5. secondary_parameter : str : Additional information requried by the entity depending on the movement_and_action_type.
+    
+    Use:
+    if is_stationed is False, required_plot_type will be ignored and movement_and_action_type must NOT be "job".
+    
+    required_plot_type is the type of plot that the entity will seek out for the profession.
+    Everything else depends on the plot itself.
+    
+    movement_and_action_type specifies the exact behaviour of the entity in special cases of entity profession being trader,
+    guard or bandit. Each requires different movement parameters and hence are special cased while job just forwards behaviour
+    to plot.
+    
+    secondary_parameter allows information such as for guards to be specified to what location / sublocation they are to guard.
+    """
+    
+    __slots__ = ["name", "is_stationed", "required_plot_type", "movement_and_action_type", "secondary_parameter"]
+    
+    def __init__(self, name : str, is_stationed : bool, required_plot_type : str | None, movement_and_action_type : Literal["trade", "guard", "job", "bandit"] | None, secondary_parameter : str):
+        self.name = name
+        self.is_stationed = is_stationed
+        self.required_plot_type = required_plot_type # Will be ignored if is_stationed is False.
+        self.movement_and_action_type = movement_and_action_type or "job"
+        self.secondary_parameter = secondary_parameter
+
+class Profession:
+    """
+    Working and active instance of any profession stored in ProfessionManager for any entity.
+    """
+    
+    __slots__ = ["profession_base", "plots", "profession_moveset", "last_acted_on"]
+    
+    def __init__(self, profession_base : ProfessionBase, plots : list[str] | None = None, profession_moveset : MoveSet | None = None, last_acted_on : int | None = None):
+        self.profession_base = profession_base
+        self.plots = plots or []
+        self.profession_moveset = profession_moveset
+        self.last_acted_on = last_acted_on
+    
+    def to_dict(self) -> dict:
+        return {
+            "profession_base" : self.profession_base.name,
+            "plots" : self.plots,
+            "profession_moveset" : self.profession_moveset.to_dict() if not self.profession_moveset is None else None
+        }
+    
+class ProfessionManager:
+    """
+    Container and Manager for managing entity Professions.
+    """
+    
+    def __init__(self, professions : dict[str, Profession]):
+        self.professions = professions
+    
+    def process(self, desire_manager : DesireManager, map_loader) -> None:
+        """
+        Processes all professions in the manager and everything related to them.
+        """
+        
+        # Needs to be written later when most of the other things are in place.
+        # Needs features such as being able to locate high value trading spots and a stable way to trade and buy plots.
+        
+        pass
+
 class BehaviourManager:
     """
-    Container and Manager for values affecting entity behaviour across trading, combat, conversations etc.
+    Container and Manager for values affecting entity behaviour across trading, combat, conversations and professions etc.
     """
     
-    __slots__ = ["relation_memory", "desire_manager", "trade_manager", "traits", "item_traits_desire_mult_cache", "profession_traits_desire_mult_cache"]
+    __slots__ = ["relation_memory", "desire_manager", "trade_manager", "profession_manager", "traits", "item_traits_desire_mult_cache", "profession_traits_desire_mult_cache"]
     
-    def __init__(self, relation_memory : RelationMemory, desire : DesireManager, trade_manager : TradeManager, traits : Tags | None = None):
+    def __init__(self, relation_memory : RelationMemory, desire : DesireManager, trade_manager : TradeManager, profession_manager : ProfessionManager, traits : Tags | None = None):
         self.relation_memory = relation_memory
         self.desire_manager = desire
         self.trade_manager = trade_manager
+        self.profession_manager = profession_manager
         self.traits = traits or Tags([])
         self.item_traits_desire_mult_cache : dict[str, float] = {}
         self.profession_traits_desire_mult_cache : dict[str, float] = {}

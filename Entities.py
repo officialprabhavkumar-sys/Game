@@ -4,7 +4,7 @@ This module contains the Entity class used to represent all entities in the game
 
 from Identity import Identity
 from Tags import Tags
-from EntityComponents import Loadout, Cultivation, MoveSetsManager
+from EntityComponents import Loadout, Cultivation, MoveSetsManager, BehaviourManager
 from Inventory import Inventory
 
 class Entity:
@@ -20,11 +20,14 @@ class Entity:
     5. tags : Tags : Tags of the entity (Used for grouping and special events).
     """
     
-    def __init__(self, identity : Identity, loadout : Loadout, inventory : Inventory, cultivation : Cultivation, movesets_manager : MoveSetsManager | None = None, tags : Tags | None = None, trading_inventory : Inventory | None = None):
+    __slots__ = ["identity", "loadout", "inventory", "cultivation", "behaviour_manager", "movesets_manager", "tags", "trading_inventory"]
+    
+    def __init__(self, identity : Identity, loadout : Loadout, inventory : Inventory, cultivation : Cultivation, behaviour_manager : BehaviourManager, movesets_manager : MoveSetsManager | None = None, tags : Tags | None = None, trading_inventory : Inventory | None = None):
         self.identity = identity
         self.loadout = loadout
         self.inventory = inventory
         self.cultivation = cultivation
+        self.behaviour_manager = behaviour_manager
         self.movesets_manager = movesets_manager or MoveSetsManager([])
         self.tags = tags or Tags([])
         self.trading_inventory = trading_inventory # can be None
