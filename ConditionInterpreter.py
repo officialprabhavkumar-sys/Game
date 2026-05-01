@@ -163,7 +163,7 @@ class ConditionInterpreter():
             LogEntry("CONDITION_INTERPRETER", 1, f"Condition \"{condition}\" caused error \"{str(e)}\". Error handled, returned False as condition evaluation.").push_to_queue()
             
             return False
-
+ 
 def test_module():
     def test_module_return_true() -> bool:
         return True

@@ -360,6 +360,11 @@ class PathFinder:
         Returns None if no path is found.
         
         Pathfinding algorithm : Dijkstra
+        
+        Best Case: O(1) - Cache hit.
+        Worst Case: O((V + E) log V) - Cache miss.
+        
+        E being the number of heap pushes and V being the number of nodes (sublocation).
         """
         
         entry = (start, target)

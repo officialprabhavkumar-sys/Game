@@ -35,11 +35,12 @@ class Conversation:
     Container for holding together dialogues.
     """
     
-    __slots__ = ["entry_text", "dialogues", "can_exit"]
+    __slots__ = ["conversation_id", "entry_text", "dialogues", "can_exit"]
     
     CONDITION_INTERPRETER : ConditionInterpreter | None = None
     
-    def __init__(self, entry_text : str, dialogues : dict[str, Dialogue], can_exit : bool = True):
+    def __init__(self, conversation_id : str, entry_text : str, dialogues : dict[str, Dialogue], can_exit : bool = True):
+        self.conversation_id = conversation_id
         self.entry_text = entry_text
         self.dialogues = dialogues
         self.can_exit = can_exit
@@ -62,6 +63,34 @@ class Conversation:
                 continue
             displayable[dialogue_id] = dialogue
         return displayable
+    
+    def add_dialogue(self, dialogue : Dialogue) -> None:
+        """
+        Adds the given dialogue to the conversation.
+        """
+        
+        self.dialogues[dialogue.dialogue_id] = dialogue
+    
+    def remove_dialogue(self, dialogue_id : str) -> None:
+        """
+        Removes the dialogue by the given dialogue_id from the conversation.
+        """
+        
+        self.dialogues.pop(dialogue_id, None)
+    
+    def has_dialogue(self, dialogue_id : str) -> bool:
+        """
+        Returns True if the dialogue by the given dialogue_id is present in the conversation, else Returns False.
+        """
+        
+        return dialogue_id in self.dialogues
+    
+    def to_dict(self) -> dict:
+        return {
+            "entry_text" : self.entry_text,
+            "dialogues" : list(self.dialogues.keys()),
+            "can_exit" : self.can_exit
+        }
 
 class ConversationContext:
     """
@@ -86,3 +115,12 @@ class ConversationContext:
     @property
     def can_exit(self) -> bool:
         return self.current_conversation.can_exit
+    
+    def to_dict(self) -> dict:
+        interaction_source = self.interaction_source
+        interaction_source = interaction_source.identity.object_id if isinstance(interaction_source, Entity) else interaction_source
+        
+        return {
+            "interaction_source" : interaction_source,
+            "current_conversation" : self.current_conversation.conversation_id
+        }

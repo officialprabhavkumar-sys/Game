@@ -11,12 +11,14 @@ class EntityCombatState:
     
     Attributes:
     1. entity : Entity : The base entity engaged in combat.
+    2. target : Entity : The entity that is the current target of this entity.
     """
     
-    __slots__ = ["entity", ]
+    __slots__ = ["entity", "target"]
     
-    def __init__(self, entity : Entity, ):
+    def __init__(self, entity : Entity, target : Entity | None = None):
         self.entity = entity
+        self.target = target
     
     @property
     def entity_id(self) -> str:

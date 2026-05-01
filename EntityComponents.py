@@ -163,20 +163,39 @@ class Stats:
     Container for holding statistics of an entity.
     """
     
-    __slots__ = ["health", "stamina", "strength", "agility"]
+    __slots__ = ["health", "stamina", "strength", "agility", "toughness"]
     
-    def __init__(self, health : int, stamina : int, strength : int, agility : int):
+    def __init__(self, health : int, stamina : int, strength : int, agility : int, toughness : int):
         self.health = health
         self.stamina = stamina
         self.strength = strength
         self.agility = agility
+        self.toughness = toughness
     
     def to_dict(self) -> dict[str, int | float]:
         return {
             "health" : self.health,
             "stamina" : self.stamina,
             "strength" : self.strength,
-            "agility" : self.agility
+            "agility" : self.agility,
+            "toughness" : self.toughness
+        }
+
+class PassiveStats:
+    """
+    Container for holding passive statistics of an entity.
+    """
+    
+    __slots__ = ["charisma", "luck"]
+    
+    def __init__(self, charisma : int, luck : int):
+        self.charisma = charisma
+        self.luck = luck
+    
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "charisma" : self.charisma,
+            "luck" : self.luck
         }
 
 class PhysicalCultivation:
@@ -1288,6 +1307,10 @@ class BehaviourManager:
         self.reset_profession_traits_desire_mult_cache()
     
     def get_desire_for_item(self, item : Item) -> float:
+        """
+        Returns desire for the item specified.
+        """
+        
         root_object_id = item.identity.root_object_id
         
         cache = self.item_traits_desire_mult_cache
@@ -1297,9 +1320,16 @@ class BehaviourManager:
         return cache[root_object_id] * self.desire_manager.get_flat_desire_for_item(item)
         
     def get_desire_for_profession(self, profession : str) -> float:
+        """
+        Returns desire for the profession specified.
+        """
         
         cache = self.profession_traits_desire_mult_cache
         
         if not profession in cache:
             cache[profession] = self.desire_manager.get_desire_mult_for_profession_by_traits(profession, self.traits)
         return cache[profession] * self.desire_manager.get_flat_desire_for_profession(profession)
+    
+    def process_professions(self, map_loader) -> None:
+        
+        self.profession_manager.process(self.desire_manager, map_loader)
